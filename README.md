@@ -39,7 +39,10 @@ python -m git_clean_history clean
 - Google API keys (`AIza...`)
 - SSH private keys
 - Generic patterns (`password=`, `secret=`, `api_key=`)
-- And more - see [patterns.py](git_clean_history/patterns.py)
+- Cloud AI keys (OpenAI, Anthropic, Groq, Cohere, Hugging Face, Replicate)
+- Messaging tokens (Twilio, SendGrid, Mailgun, Telegram, Discord)
+- Database connection strings
+- And more - see [patterns/](git_clean_history/patterns/) for the full library
 
 ## How is this different from truffleHog/gitleaks?
 
