@@ -4,6 +4,7 @@ Scan your git repos for accidentally committed secrets and remove them from hist
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![CI](https://github.com/RedBeret/git-clean-history/actions/workflows/ci.yml/badge.svg)](https://github.com/RedBeret/git-clean-history/actions/workflows/ci.yml)
 
 ## What it does
 
@@ -11,38 +12,102 @@ Scan your git repos for accidentally committed secrets and remove them from hist
 2. **Report** - shows you exactly which commits contain what secrets
 3. **Clean** - helps remove secrets from git history using filter-branch or BFG
 
+## Install
+
+Works on macOS, Linux and Windows.
+
+```bash
+# from PyPI (when published)
+pip install git-clean-history
+
+# from source
+git clone https://github.com/RedBeret/git-clean-history.git
+cd git-clean-history
+pip install -e .
+```
+
 ## Quick start
 
 ```bash
-pip install -r requirements.txt
-
 # scan current repo
-python -m git_clean_history scan
+git-clean-history scan
 
 # scan a specific repo
-python -m git_clean_history scan /path/to/repo
+git-clean-history scan /path/to/repo
+
+# JSON output for CI pipelines
+git-clean-history scan --format json
 
 # generate a report
-python -m git_clean_history report
+git-clean-history report
 
 # clean secrets from history (careful - rewrites history)
-python -m git_clean_history clean
+git-clean-history clean
 ```
 
 ## Detected patterns
 
-- AWS access keys (`AKIA...`)
-- GitHub tokens (`ghp_`, `gho_`, `ghs_`, `ghu_`, `ghr_`)
-- GitLab tokens (`glpat-`)
-- Slack tokens and webhooks
-- Stripe keys (`sk_live_`, `pk_live_`)
-- Google API keys (`AIza...`)
-- SSH private keys
-- Generic patterns (`password=`, `secret=`, `api_key=`)
-- Cloud AI keys (OpenAI, Anthropic, Groq, Cohere, Hugging Face, Replicate)
-- Messaging tokens (Twilio, SendGrid, Mailgun, Telegram, Discord)
-- Database connection strings
-- And more - see [patterns/](git_clean_history/patterns/) for the full library
+### Cloud providers
+- **AWS** - access keys (`AKIA...`), MWS auth tokens
+- **Azure** - storage account keys, AD client secrets, SAS tokens, DevOps PATs, Teams webhooks
+- **Google/GCP** - API keys (`AIza...`), OAuth client IDs, service account keys
+- **DigitalOcean** - personal access tokens, OAuth tokens, Spaces keys
+- **Firebase** - cloud messaging keys, database URLs
+
+### Code platforms
+- **GitHub** - personal access tokens (`ghp_`), OAuth, user-to-server, server-to-server, refresh tokens, fine-grained PATs
+- **GitLab** - personal access tokens (`glpat-`), pipeline tokens, runner tokens
+
+### AI/ML services
+- **OpenAI** - API keys (`sk-proj-`)
+- **Anthropic** - API keys (`sk-ant-`)
+- **Groq** - API keys (`gsk_`)
+- **Cohere** - API keys (`co-`)
+- **Hugging Face** - tokens (`hf_`)
+- **Replicate** - API tokens (`r8_`)
+
+### Payment providers
+- **Stripe** - secret keys, publishable keys, restricted keys, test keys
+- **Square** - access tokens, OAuth secrets
+- **PayPal/Braintree** - access tokens
+
+### Messaging
+- **Slack** - bot tokens, user tokens, webhooks, app tokens
+- **Twilio** - API keys
+- **SendGrid** - API keys
+- **Mailgun** - API keys
+- **Telegram** - bot tokens
+- **Discord** - bot tokens
+
+### Infrastructure
+- **HashiCorp** - Vault tokens (`hvs.`, `hvb.`), Terraform Cloud tokens
+- **Vercel** - access tokens
+- **Netlify** - access tokens
+- **Fly.io** - access tokens
+- **Databricks** - API tokens
+- **Linear** - API keys
+
+### Package registries
+- **npm** - access tokens, legacy tokens
+- **PyPI** - API tokens
+- **Docker Hub** - access tokens
+- **NuGet** - API keys
+- **RubyGems** - API keys
+
+### SaaS platforms
+- **Shopify** - access tokens, custom app tokens, private app passwords, shared secrets
+- **Supabase** - service role keys, anon keys
+- **PlanetScale** - database tokens, OAuth tokens
+
+### Cryptographic material
+- RSA, DSA, EC, OpenSSH, PGP private keys
+- PKCS8 encrypted private keys
+
+### Generic patterns
+- Password/secret/token assignments in code
+- Database connection strings with credentials
+- Bearer tokens and Basic auth headers
+- JWT tokens (`eyJ...`)
 
 ## How is this different from truffleHog/gitleaks?
 
@@ -52,21 +117,22 @@ Those tools are great at finding secrets. This tool focuses on **cleanup**:
 - Wraps BFG repo cleaner for easy history rewriting
 - Includes a pre-commit hook to prevent future leaks
 - Simple CLI focused on the scan-report-clean workflow
+- Modular pattern library - easy to add your own provider patterns
 
 ## Commands
 
 ```bash
 # scan for secrets
-python -m git_clean_history scan [path] [--pattern custom_regex]
+git-clean-history scan [path] [--format text|json]
 
-# generate report
-python -m git_clean_history report [--format text|json]
+# generate grouped report
+git-clean-history report [path] [--format text|json]
 
-# clean history
-python -m git_clean_history clean [--dry-run]
+# clean history (interactive)
+git-clean-history clean [path] [--dry-run]
 
 # install pre-commit hook
-python -m git_clean_history hook install
+git-clean-history hook install
 ```
 
 ## Configuration
@@ -78,6 +144,7 @@ Create a `.git-clean-history.yaml` in your repo:
 custom_patterns:
   - name: internal_api
     pattern: "mycompany-api-[a-z0-9]{32}"
+    severity: high
 
 # paths to ignore
 ignore_paths:
@@ -88,6 +155,40 @@ ignore_paths:
 ignore_patterns:
   - "EXAMPLE_KEY"
   - "test_token_123"
+```
+
+## Adding your own patterns
+
+Drop a Python file in `git_clean_history/patterns/` with a `PATTERNS` list:
+
+```python
+"""My custom secret patterns."""
+
+PATTERNS = [
+    {
+        "name": "My Internal Token",
+        "pattern": r"myco_[A-Za-z0-9]{32}",
+        "severity": "high",
+        "provider": "internal",
+    },
+]
+```
+
+Patterns are auto-discovered at runtime. No registration needed.
+
+## CI/CD integration
+
+### GitHub Actions
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0  # need full history
+- uses: actions/setup-python@v5
+  with:
+    python-version: "3.12"
+- run: pip install git-clean-history
+- run: git-clean-history scan --format json > scan-results.json
 ```
 
 ## License
